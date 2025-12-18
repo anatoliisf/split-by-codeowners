@@ -45,13 +45,13 @@ jobs:
         run: ${{ inputs.codemod_command }}
 
       - name: Resolve CODEOWNERS
-        uses: SvanBoxel/codeowners-action@v1
+        uses: SvanBoxel/codeowners-action@v2
         with:
           file_match_info: true
           include_no_owners: true
 
       - id: bucket
-        uses: anatoliisf/split-by-codeowners@v1.0.3
+        uses: anatoliisf/split-by-codeowners@v1.0.4
         with:
           max_buckets: ${{ inputs.max_prs }}
           exclude_patterns: ${{ inputs.exclude_patterns }}
