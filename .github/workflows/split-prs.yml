@@ -51,7 +51,7 @@ jobs:
           include_no_owners: true
 
       - id: bucket
-        uses: anatoliisf/split-by-codeowners@v1
+        uses: anatoliisf/split-by-codeowners@v1.0.3
         with:
           max_buckets: ${{ inputs.max_prs }}
           exclude_patterns: ${{ inputs.exclude_patterns }}
