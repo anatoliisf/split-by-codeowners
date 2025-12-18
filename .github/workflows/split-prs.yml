@@ -44,26 +44,8 @@ jobs:
         shell: bash
         run: ${{ inputs.codemod_command }}
 
-      - name: Resolve CODEOWNERS
-        uses: SvanBoxel/codeowners-action@v2
-        with:
-          file_match_info: true
-          include_no_owners: true
-
-      - name: Debug workspace after CODEOWNERS
-        shell: bash
-        run: |
-          echo "=== PWD ==="
-          pwd
-          echo
-          echo "=== ls -la (repo root) ==="
-          ls -la
-          echo
-          echo "=== find codeowners-related files ==="
-          find . -maxdepth 2 -type f | grep -i code || true
-
       - id: bucket
-        uses: anatoliisf/split-by-codeowners@v1.0.5
+        uses: anatoliisf/split-by-codeowners@v1.0.6
         with:
           max_buckets: ${{ inputs.max_prs }}
           exclude_patterns: ${{ inputs.exclude_patterns }}

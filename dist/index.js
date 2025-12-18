@@ -26013,6 +26013,50 @@ function toMatrix(buckets, patchDir, bucketPrefix) {
 
 /***/ }),
 
+/***/ 3586:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parseCodeowners = parseCodeowners;
+exports.ownersForFile = ownersForFile;
+const node_fs_1 = __importDefault(__nccwpck_require__(3024));
+const minimatch_1 = __nccwpck_require__(6507);
+function parseCodeowners(path) {
+    const text = node_fs_1.default.readFileSync(path, "utf8");
+    const rules = [];
+    for (const raw of text.split("\n")) {
+        const line = raw.trim();
+        if (!line || line.startsWith("#"))
+            continue;
+        const parts = line.split(/\s+/).filter(Boolean);
+        if (parts.length < 2)
+            continue;
+        rules.push({ pattern: parts[0], owners: parts.slice(1) });
+    }
+    return rules;
+}
+function matches(file, pattern) {
+    const f = file.replace(/\\/g, "/");
+    // crude but works for most repos:
+    const pat = pattern.startsWith("/") ? pattern.slice(1) : pattern;
+    return (0, minimatch_1.minimatch)(f, pat, { dot: true, matchBase: !pattern.startsWith("/") });
+}
+function ownersForFile(file, rules) {
+    let hit;
+    for (const r of rules)
+        if (matches(file, r.pattern))
+            hit = r; // last wins
+    return { owners: hit?.owners ?? [], rule: hit?.pattern };
+}
+
+
+/***/ }),
+
 /***/ 1243:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -26090,9 +26134,10 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(7484));
 const git_1 = __nccwpck_require__(1243);
 const buckets_1 = __nccwpck_require__(4140);
+const codeowners_1 = __nccwpck_require__(3586);
 async function run() {
     try {
-        const codeownersJsonPath = core.getInput("codeowners_json") || "codeowner-information.json";
+        const codeownersPath = core.getInput("codeowners_path") || "CODEOWNERS";
         const includeUnowned = (0, buckets_1.parseBool)(core.getInput("include_unowned"));
         const unownedKey = core.getInput("unowned_bucket_key") || "__UNOWNED__";
         const maxBuckets = Number(core.getInput("max_buckets") || "30");
@@ -26100,6 +26145,7 @@ async function run() {
         const patchDir = core.getInput("patch_dir") || "bucket-patches";
         const bucketPrefix = core.getInput("bucket_prefix") || "bucket";
         const dryRun = (0, buckets_1.parseBool)(core.getInput("dry_run"));
+        // 1) discover changed files (workspace)
         const changed = (0, git_1.getChangedFiles)(core.getInput("base_ref"));
         const filtered = (0, buckets_1.applyExcludes)(changed, excludePatterns);
         core.info(`Changed files: ${changed.length} (after excludes: ${filtered.length})`);
@@ -26108,16 +26154,44 @@ async function run() {
             core.setOutput("buckets_json", JSON.stringify([]));
             return;
         }
-        const codeowners = (0, buckets_1.readCodeownersJson)(codeownersJsonPath);
-        const buckets = (0, buckets_1.buildBuckets)(filtered, codeowners, includeUnowned, unownedKey);
+        // 2) parse CODEOWNERS and resolve owners per file
+        const rules = (0, codeowners_1.parseCodeowners)(codeownersPath);
+        const bucketsMap = new Map();
+        for (const file of filtered) {
+            const { owners, rule } = (0, codeowners_1.ownersForFile)(file, rules);
+            const sortedOwners = (owners ?? []).slice().sort();
+            const isUnowned = sortedOwners.length === 0;
+            if (isUnowned && !includeUnowned)
+                continue;
+            const key = isUnowned
+                ? unownedKey
+                : sortedOwners
+                    .join("|")
+                    .replaceAll("@", "")
+                    .replaceAll("/", "-")
+                    .replaceAll(" ", "");
+            const existing = bucketsMap.get(key);
+            if (!existing) {
+                bucketsMap.set(key, {
+                    key,
+                    owners: sortedOwners,
+                    files: [{ file, owners: sortedOwners, rule }],
+                });
+            }
+            else {
+                existing.files.push({ file, owners: sortedOwners, rule });
+            }
+        }
+        const buckets = [...bucketsMap.values()].sort((a, b) => a.key.localeCompare(b.key));
         if (buckets.length > maxBuckets) {
             throw new Error(`Too many buckets: ${buckets.length} > max_buckets=${maxBuckets}`);
         }
+        // 3) write per-bucket patches
         if (!dryRun) {
             (0, buckets_1.ensureDir)(patchDir);
             buckets.forEach((b, idx) => {
                 const patchPath = `${patchDir}/${bucketPrefix}-${idx + 1}.patch`;
-                const paths = b.files.map(f => f.file);
+                const paths = b.files.map((f) => f.file);
                 core.info(`Writing ${patchPath} (${paths.length} files) for bucket=${b.key}`);
                 (0, git_1.writePatchForPaths)(patchPath, paths);
             });
@@ -26125,6 +26199,7 @@ async function run() {
         else {
             core.info("dry_run=true; not generating patches.");
         }
+        // 4) output matrix + buckets json
         const matrix = (0, buckets_1.toMatrix)(buckets, patchDir, bucketPrefix);
         core.setOutput("matrix_json", JSON.stringify(matrix));
         core.setOutput("buckets_json", JSON.stringify(buckets));

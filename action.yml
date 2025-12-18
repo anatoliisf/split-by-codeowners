@@ -6,10 +6,10 @@ branding:
   color: "blue"
 
 inputs:
-  codeowners_json:
-    description: "Path to codeowner-information.json produced by SvanBoxel/codeowners-action"
+  codeowners_path:
+    description: "Path to CODEOWNERS. Defaults to CODEOWNERS at repo root."
     required: false
-    default: "codeowner-information.json"
+    default: "CODEOWNERS"
 
   base_ref:
     description: "Optional base ref for changed files discovery. If empty, uses HEAD vs working tree."
