@@ -25968,7 +25968,7 @@ function stableBucketKey(owners, unownedKey) {
         .replaceAll(" ", "");
 }
 function readCodeownersJson(codeownersJsonPath) {
-    const raw = node_fs_1.default.readFileSync(codeownersJsonPath, "utf8");
+    const raw = node_fs_1.default.readFileSync(node_path_1.default.resolve(process.cwd(), codeownersJsonPath), "utf8");
     return JSON.parse(raw);
 }
 function buildBuckets(changedFiles, codeowners, includeUnowned, unownedKey) {

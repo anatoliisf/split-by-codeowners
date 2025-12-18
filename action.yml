@@ -1,6 +1,6 @@
 name: "Split changes by CODEOWNERS (bucketize + patches)"
 description: "Bucketizes local git changes by effective CODEOWNERS (via codeowner-information.json) and generates per-bucket patches + matrix JSON."
-author: "YOUR_ORG"
+author: "anatoliisf"
 branding:
   icon: "shuffle"
   color: "blue"

@@ -32,7 +32,7 @@ function stableBucketKey(owners: Owner[], unownedKey: string) {
 }
 
 export function readCodeownersJson(codeownersJsonPath: string): CodeownersJson {
-  const raw = fs.readFileSync(codeownersJsonPath, "utf8");
+  const raw = fs.readFileSync(path.resolve(process.cwd(), codeownersJsonPath), "utf8");
   return JSON.parse(raw) as CodeownersJson;
 }
 
