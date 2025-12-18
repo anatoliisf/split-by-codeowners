@@ -1,0 +1,62 @@
+name: "Split changes by CODEOWNERS (bucketize + patches)"
+description: "Bucketizes local git changes by effective CODEOWNERS (via codeowner-information.json) and generates per-bucket patches + matrix JSON."
+author: "YOUR_ORG"
+branding:
+  icon: "shuffle"
+  color: "blue"
+
+inputs:
+  codeowners_json:
+    description: "Path to codeowner-information.json produced by SvanBoxel/codeowners-action"
+    required: false
+    default: "codeowner-information.json"
+
+  base_ref:
+    description: "Optional base ref for changed files discovery. If empty, uses HEAD vs working tree."
+    required: false
+    default: ""
+
+  include_unowned:
+    description: "Include files with no owners in a special bucket"
+    required: false
+    default: "true"
+
+  unowned_bucket_key:
+    description: "Bucket key for unowned files"
+    required: false
+    default: "__UNOWNED__"
+
+  max_buckets:
+    description: "Fail if buckets exceed this number"
+    required: false
+    default: "30"
+
+  exclude_patterns:
+    description: "Newline-separated glob patterns to exclude"
+    required: false
+    default: ""
+
+  patch_dir:
+    description: "Directory to write patches"
+    required: false
+    default: "bucket-patches"
+
+  bucket_prefix:
+    description: "Patch file prefix"
+    required: false
+    default: "bucket"
+
+  dry_run:
+    description: "Compute buckets but don't write patches"
+    required: false
+    default: "false"
+
+outputs:
+  matrix_json:
+    description: "JSON for strategy.matrix (one bucket per job)"
+  buckets_json:
+    description: "Full buckets JSON"
+
+runs:
+  using: "node24"
+  main: "dist/index.js"
