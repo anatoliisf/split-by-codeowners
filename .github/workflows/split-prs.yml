@@ -1,0 +1,97 @@
+name: Split PRs by CODEOWNERS
+
+on:
+  workflow_call:
+    inputs:
+      codemod_command:
+        description: "Command that applies codemods/changes"
+        required: true
+        type: string
+      max_prs:
+        description: "Fail if more than N PRs would be created"
+        required: false
+        default: "20"
+        type: string
+      exclude_patterns:
+        description: "Newline-separated globs to exclude from splitting"
+        required: false
+        default: ""
+        type: string
+      include_unowned:
+        description: "Include files with no owners"
+        required: false
+        default: true
+        type: boolean
+      draft:
+        description: "Create PRs as drafts"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bucketize:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.bucket.outputs.matrix_json }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run codemods
+        shell: bash
+        run: ${{ inputs.codemod_command }}
+
+      - name: Resolve CODEOWNERS
+        uses: SvanBoxel/codeowners-action@v1
+        with:
+          file_match_info: true
+          include_no_owners: true
+
+      - id: bucket
+        uses: anatoliisf/split-by-codeowners@v1
+        with:
+          max_buckets: ${{ inputs.max_prs }}
+          exclude_patterns: ${{ inputs.exclude_patterns }}
+          include_unowned: ${{ inputs.include_unowned }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bucket-patches
+          path: bucket-patches
+
+  prs:
+    needs: bucketize
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.bucketize.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bucket-patches
+          path: bucket-patches
+
+      - name: Apply patch
+        shell: bash
+        run: |
+          test -f "${{ matrix.patch_path }}"
+          git apply --index "${{ matrix.patch_path }}"
+
+      - name: Create PR (one per bucket)
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ github.token }}
+          branch: codemods/${{ matrix.bucket_key }}
+          delete-branch: true
+          draft: ${{ inputs.draft }}
+          title: "chore: automated changes (${{ join(matrix.owners, ', ') }})"
+          body: |
+            Automated changes bucketed by CODEOWNERS.
+            Owners: ${{ join(matrix.owners, ', ') }}
+            Bucket key: ${{ matrix.bucket_key }}
+          commit-message: "chore: automated changes"
