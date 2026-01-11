@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 
 function sh(cmd: string, cwd?: string): string {
@@ -64,13 +65,31 @@ export function writePatchForPaths(patchPath: string, paths: string[]) {
   // 2) untracked additions (append, without touching index)
   for (const f of untracked) {
     const q = `"${f.replace(/"/g, '\\"')}"`;
-    // NOTE: `git diff --no-index` requires exactly two path arguments (no pathspec `--` separator).
-    // Also, it exits with code 1 when a diff exists, which is expected; treat 1 as success.
-    execAllowExitCodes(
-      `git diff --binary --no-index /dev/null ${q} >> "${abs.replace(/"/g, '\\"')}"`,
-      [1],
-      { stdio: "inherit" }
-    );
+    // `git diff --no-index` returns exit code 1 when differences exist (expected). We need the stdout either way.
+    try {
+      const out = execSync(`git diff --binary --no-index -- "/dev/null" ${q}`, {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      if (out) fs.appendFileSync(abs, out);
+    } catch (e: any) {
+      const status: number | null | undefined = e?.status;
+      const stdout = (e?.stdout ?? "") as string | Buffer;
+      const stderr = (e?.stderr ?? "") as string | Buffer;
+      const outStr = Buffer.isBuffer(stdout) ? stdout.toString("utf8") : String(stdout);
+      const errStr = Buffer.isBuffer(stderr) ? stderr.toString("utf8") : String(stderr);
+
+      if (status === 1) {
+        if (errStr.trim()) {
+          // When status=1, stderr should usually be empty. If it's not, treat as a real error.
+          throw new Error(errStr.trim());
+        }
+        if (outStr) fs.appendFileSync(abs, outStr);
+        continue;
+      }
+
+      throw new Error(errStr.trim() || `git diff --no-index failed with status=${status ?? "unknown"}`);
+    }
   }
 }
 
