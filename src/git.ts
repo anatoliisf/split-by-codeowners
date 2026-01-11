@@ -67,7 +67,8 @@ export function writePatchForPaths(patchPath: string, paths: string[]) {
     const q = `"${f.replace(/"/g, '\\"')}"`;
     // `git diff --no-index` returns exit code 1 when differences exist (expected). We need the stdout either way.
     try {
-      const out = execSync(`git diff --binary --no-index -- "/dev/null" ${q}`, {
+      // IMPORTANT: for --no-index, pass exactly TWO paths, no `--` pathspec separator.
+      const out = execSync(`git diff --binary --no-index /dev/null ${q}`, {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
       });
