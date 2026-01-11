@@ -1,0 +1,63 @@
+name: Publish CLI to npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: "npm dist-tag (e.g. latest, next)"
+        required: true
+        default: "latest"
+      dry_run:
+        description: "If true, build + pack but do not publish"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build (dist + dist-cli)
+        run: npm run build
+
+      - name: Show package info
+        shell: bash
+        run: |
+          node -p "require('./package.json').name + '@' + require('./package.json').version"
+          test -f dist/index.js
+          test -f dist-cli/index.js
+
+      - name: Fail if version already published
+        shell: bash
+        run: |
+          NAME="$(node -p "require('./package.json').name")"
+          VER="$(node -p "require('./package.json').version")"
+          if npm view "${NAME}@${VER}" version >/dev/null 2>&1; then
+            echo "Version already published: ${NAME}@${VER}"
+            exit 1
+          fi
+
+      - name: Pack (dry run)
+        if: ${{ inputs.dry_run }}
+        run: npm pack
+
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --tag "${{ inputs.npm_tag }}"
+

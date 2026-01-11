@@ -169,3 +169,13 @@ Build bundles (committed `dist/` is required for Marketplace Actions):
 npm ci
 npm run build
 ```
+
+## Maintainers
+
+### Publish CLI to npm (manual)
+
+This repo includes a manual workflow: `.github/workflows/publish-npm.yml`.
+
+- Create an npm token with publish rights and add it as repo secret **`NPM_TOKEN`**.
+- Bump `package.json` version and ensure `dist/` and `dist-cli/` are up to date.
+- Run the workflow from the GitHub Actions UI (`workflow_dispatch`).

@@ -2,10 +2,32 @@
 	"name": "split-by-codeowners",
 	"version": "1.0.0",
 	"description": "Split local changes into CODEOWNERS buckets and (optionally) create one PR per bucket (CLI + GitHub Action).",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/anatoliisf/split-by-codeowners.git"
+	},
+	"homepage": "https://github.com/anatoliisf/split-by-codeowners#readme",
+	"bugs": {
+		"url": "https://github.com/anatoliisf/split-by-codeowners/issues"
+	},
+	"keywords": [
+		"github-actions",
+		"codeowners",
+		"codemod",
+		"pull-request",
+		"cli"
+	],
+	"author": "anatoliisf",
 	"license": "MIT",
 	"main": "dist/index.js",
 	"bin": {
 		"split-by-codeowners": "dist-cli/index.js"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"engines": {
+		"node": ">=20"
 	},
 	"files": [
 		"dist",
