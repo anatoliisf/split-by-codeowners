@@ -1,16 +1,5 @@
 export type Owner = string;
 
-export type FileMatch = {
-  owners?: Owner[];
-  // SvanBoxel includes extra info when file_match_info=true; we keep it flexible.
-  matched_rule?: string;
-  rule_match?: string;
-};
-
-export type CodeownersJson = {
-  fileMatches?: Record<string, FileMatch>;
-};
-
 export type BucketFile = {
   file: string;
   owners: Owner[];
@@ -21,4 +10,53 @@ export type Bucket = {
   key: string;
   owners: Owner[];
   files: BucketFile[];
+};
+
+export type RepoRef = { owner: string; repo: string };
+
+export type PullRequestInfo = {
+  bucket_key: string;
+  branch: string;
+  number: number;
+  url: string;
+};
+
+export type SplitConfig = {
+  // bucketing
+  codeownersPath: string;
+  baseRef?: string;
+  includeUnowned: boolean;
+  unownedBucketKey: string;
+  maxBuckets: number;
+  excludePatterns: string[];
+
+  // patch output
+  patchDir: string;
+  bucketPrefix: string;
+  dryRun: boolean;
+  cleanupPatches: boolean;
+
+  // PR creation (optional)
+  createPrs: boolean;
+  githubToken?: string;
+  repo?: RepoRef;
+  baseBranch?: string;
+  branchPrefix: string;
+  commitMessage: string;
+  prTitle: string;
+  prBody: string;
+  draft: boolean;
+  remoteName: string;
+};
+
+export type Logger = {
+  info: (msg: string) => void;
+  warn: (msg: string) => void;
+  error: (msg: string) => void;
+};
+
+export type SplitResult = {
+  buckets: Bucket[];
+  matrix: { include: Array<{ bucket_key: string; owners: Owner[]; files: string[]; patch_path: string }> };
+  prs?: PullRequestInfo[];
 };

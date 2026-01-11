@@ -1,22 +1,37 @@
-# Split PRs by CODEOWNERS (codemods → one PR per owner group)
+# split-by-codeowners
 
-This repo provides:
-1) A Marketplace Action: `anatoliisf/split-by-codeowners@v1` (bucketize + patches + matrix JSON)
-2) A Reusable Workflow: `split-prs.yml` (recommended UX) that runs codemods and creates PRs using `peter-evans/create-pull-request`
+Two entrypoints sharing the same core logic:
 
-## Recommended usage (one-liner UX)
+- **Local dev (CLI via `npx`)**: bucketize your current git working tree changes by CODEOWNERS, optionally push branches + create/update one PR per bucket.
+- **CI (GitHub Action)**: same behavior inside GitHub Actions (**no third-party PR-creation actions**).
+
+### CLI usage (local dev)
+
+Bucketize + write patches:
+
+```bash
+npx split-by-codeowners --exclude - < excludes.txt
+```
+
+Create one PR per bucket:
+
+```bash
+export GH_TOKEN=... # needs contents:write + pull-requests:write
+npx split-by-codeowners --create-prs --base-branch main
+```
+
+### GitHub Action usage (CI)
+
+After `actions/checkout` and after you run your codemods (that modify the working tree), run:
 
 ```yaml
-jobs:
-  split_prs:
-    uses: anatoliisf/split-by-codeowners/.github/workflows/split-prs.yml@v1
-    permissions:
-      contents: write
-      pull-requests: write
-    with:
-      codemod_command: ./run-codemods.sh
-      max_prs: "20"
-      exclude_patterns: |
-        **/yarn.lock
-        **/pnpm-lock.yaml
-        **/package-lock.json
+- name: Split into CODEOWNERS PRs
+  uses: anatoliisf/split-by-codeowners@v1
+  with:
+    create_prs: "true"
+    github_token: ${{ github.token }}
+```
+
+### Reusable workflow (optional)
+
+This repo also ships `.github/workflows/split-prs.yml`, which runs your codemod command and then calls the Action to create PRs.

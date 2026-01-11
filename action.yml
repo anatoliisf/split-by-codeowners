@@ -1,5 +1,5 @@
 name: "Split changes by CODEOWNERS (bucketize + patches)"
-description: "Bucketizes local git changes by effective CODEOWNERS (via codeowner-information.json) and generates per-bucket patches + matrix JSON."
+description: "Bucketizes local git changes by effective CODEOWNERS and can optionally create one PR per bucket (no third-party PR actions)."
 author: "anatoliisf"
 branding:
   icon: "shuffle"
@@ -51,12 +51,59 @@ inputs:
     required: false
     default: "false"
 
+  cleanup_patches:
+    description: "If true, delete patch_dir after successful run (useful when create_prs=true)."
+    required: false
+    default: "false"
+
+  create_prs:
+    description: "If true, create/update one PR per bucket by pushing branches and calling GitHub API."
+    required: false
+    default: "false"
+
+  github_token:
+    description: "GitHub token used for API + pushing branches. Defaults to GITHUB_TOKEN."
+    required: false
+    default: ""
+
+  base_branch:
+    description: "Base branch to open PRs against. If empty, uses repo default branch."
+    required: false
+    default: ""
+
+  branch_prefix:
+    description: "Prefix for created branches."
+    required: false
+    default: "codemods/"
+
+  commit_message:
+    description: "Commit message used in bucket PRs."
+    required: false
+    default: "chore: automated changes"
+
+  pr_title:
+    description: "PR title template. Supports {owners} and {bucket_key}."
+    required: false
+    default: "chore: automated changes ({owners})"
+
+  pr_body:
+    description: "PR body template. Supports {owners}, {bucket_key}, {files}."
+    required: false
+    default: "Automated changes bucketed by CODEOWNERS.\n\nOwners: {owners}\nBucket key: {bucket_key}\n\nFiles:\n{files}\n"
+
+  draft:
+    description: "Create PRs as drafts."
+    required: false
+    default: "false"
+
 outputs:
   matrix_json:
     description: "JSON for strategy.matrix (one bucket per job)"
   buckets_json:
     description: "Full buckets JSON"
+  prs_json:
+    description: "If create_prs=true, JSON list of created/updated PRs (url + number + bucket_key)."
 
 runs:
-  using: "node24"
+  using: "node20"
   main: "dist/index.js"

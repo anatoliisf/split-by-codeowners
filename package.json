@@ -1,15 +1,29 @@
 {
 	"name": "split-by-codeowners",
 	"version": "1.0.0",
-	"private": true,
+	"description": "Split local changes into CODEOWNERS buckets and (optionally) create one PR per bucket (CLI + GitHub Action).",
+	"license": "MIT",
 	"main": "dist/index.js",
+	"bin": {
+		"split-by-codeowners": "dist-cli/index.js"
+	},
+	"files": [
+		"dist",
+		"dist-cli",
+		"action.yml",
+		"README.md",
+		"LICENSE"
+	],
 	"scripts": {
-		"build": "ncc build src/index.ts -o dist --source-map",
+		"build": "npm run build:action && npm run build:cli",
+		"build:action": "ncc build src/index.ts -o dist --source-map",
+		"build:cli": "ncc build src/cli.ts -o dist-cli --source-map",
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
 	"dependencies": {
 		"@actions/core": "^1.11.1",
-		"minimatch": "^9.0.5"
+		"minimatch": "^9.0.5",
+		"octokit": "^4.1.0"
 	},
 	"devDependencies": {
 		"@types/node": "^25.0.3",

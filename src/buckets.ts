@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { minimatch } from "minimatch";
-import { Bucket, BucketFile, CodeownersJson, Owner } from "./types";
+import { Bucket, BucketFile, Owner } from "./types";
 
 export function parseBool(v: string) {
   return String(v).toLowerCase() === "true";
@@ -29,44 +29,6 @@ function stableBucketKey(owners: Owner[], unownedKey: string) {
     .replaceAll("@", "")
     .replaceAll("/", "-")
     .replaceAll(" ", "");
-}
-
-export function readCodeownersJson(codeownersJsonPath: string): CodeownersJson {
-  const raw = fs.readFileSync(path.resolve(process.cwd(), codeownersJsonPath), "utf8");
-  return JSON.parse(raw) as CodeownersJson;
-}
-
-export function buildBuckets(
-  changedFiles: string[],
-  codeowners: CodeownersJson,
-  includeUnowned: boolean,
-  unownedKey: string
-): Bucket[] {
-  const fileMatches = codeowners.fileMatches ?? {};
-  const buckets = new Map<string, Bucket>();
-
-  for (const file of changedFiles) {
-    const match = fileMatches[file];
-    const owners = (match?.owners ?? []).slice().sort();
-    const isUnowned = owners.length === 0;
-    if (isUnowned && !includeUnowned) continue;
-
-    const key = stableBucketKey(owners, unownedKey);
-    const bf: BucketFile = {
-      file,
-      owners,
-      rule: match?.matched_rule ?? match?.rule_match
-    };
-
-    const existing = buckets.get(key);
-    if (!existing) {
-      buckets.set(key, { key, owners, files: [bf] });
-    } else {
-      existing.files.push(bf);
-    }
-  }
-
-  return [...buckets.values()].sort((a, b) => a.key.localeCompare(b.key));
 }
 
 export function ensureDir(dir: string) {
