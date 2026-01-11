@@ -30,7 +30,20 @@ export function getChangedFiles(baseRef?: string): string[] {
   // Optional: if baseRef provided, you can extend to include committed changes too
   // (left minimal—most codemod flows are uncommitted workspace changes)
 
-  return [...out].sort((a, b) => a.localeCompare(b));
+  // Defensive: git can sometimes surface untracked directories (e.g. nested git checkouts) as `dir/`.
+  // Filter out directories to avoid later patch-generation errors.
+  const filesOnly = [...out].filter((p) => {
+    const normalized = p.replace(/\\/g, "/");
+    if (normalized.endsWith("/")) return false;
+    try {
+      return !fs.lstatSync(path.resolve(process.cwd(), p)).isDirectory();
+    } catch {
+      // If it doesn't exist or can't be stat'd, keep it; later steps will surface a clearer error.
+      return true;
+    }
+  });
+
+  return filesOnly.sort((a, b) => a.localeCompare(b));
 }
 
 function listUntrackedIn(paths: string[]): string[] {
