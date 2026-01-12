@@ -91,6 +91,16 @@ inputs:
     required: false
     default: "Automated changes bucketed by CODEOWNERS.\n\nOwners: {owners}\nBucket key: {bucket_key}\n\nFiles:\n{files}\n"
 
+  pr_body_mode:
+    description: "PR body mode for PR creation: custom | template | template_with_bucket | none"
+    required: false
+    default: "custom"
+
+  pr_template_path:
+    description: "Path to pull request template file (used when pr_body_mode=template*)."
+    required: false
+    default: ".github/pull_request_template.md"
+
   draft:
     description: "Create PRs as drafts."
     required: false

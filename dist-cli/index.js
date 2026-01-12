@@ -1829,6 +1829,7 @@ const codeowners_1 = __nccwpck_require__(586);
 const git_1 = __nccwpck_require__(243);
 const github_1 = __nccwpck_require__(248);
 const ghcli_1 = __nccwpck_require__(64);
+const pr_template_1 = __nccwpck_require__(456);
 function formatTemplate(tpl, vars) {
     let out = tpl;
     for (const [k, v] of Object.entries(vars))
@@ -1948,8 +1949,22 @@ async function runSplit(config, logger) {
                 (0, git_1.pushBranch)(config.remoteName, branch, worktreeDir);
                 const ownersStr = b.owners.length ? b.owners.join(", ") : "(unowned)";
                 const filesStr = b.files.map(f => `- ${f.file}`).join("\n");
+                const bucketInfo = formatTemplate("Automated changes bucketed by CODEOWNERS.\n\nOwners: {owners}\nBucket key: {bucket_key}\n\nFiles:\n{files}\n", { owners: ownersStr, bucket_key: b.key, files: filesStr });
                 const title = formatTemplate(config.prTitle, { owners: ownersStr, bucket_key: b.key });
-                const body = formatTemplate(config.prBody, { owners: ownersStr, bucket_key: b.key, files: filesStr });
+                let body;
+                if (config.prBodyMode === "none") {
+                    body = undefined;
+                }
+                else if (config.prBodyMode === "custom") {
+                    body = formatTemplate(config.prBody, { owners: ownersStr, bucket_key: b.key, files: filesStr });
+                }
+                else {
+                    const template = (0, pr_template_1.readPrTemplate)(worktreeDir, config.prTemplatePath) ?? "";
+                    body =
+                        config.prBodyMode === "template_with_bucket"
+                            ? (template ? template.trimEnd() + "\n\n---\n\n" + bucketInfo : bucketInfo)
+                            : (template || bucketInfo);
+                }
                 const pr = useGhCli
                     ? (() => {
                         return (0, ghcli_1.upsertPullRequestViaGh)({
@@ -1957,7 +1972,7 @@ async function runSplit(config, logger) {
                             base: baseBranch,
                             head: branch,
                             title,
-                            body,
+                            body: body ?? "",
                             draft: config.draft,
                             bucketKey: b.key
                         });
@@ -1968,7 +1983,7 @@ async function runSplit(config, logger) {
                         base: baseBranch,
                         head: branch,
                         title,
-                        body,
+                        body: body ?? "",
                         draft: config.draft,
                         bucketKey: b.key
                     });
@@ -2469,10 +2484,44 @@ async function upsertPullRequest(params) {
         head,
         base,
         title,
-        body,
+        body: body || "",
         draft
     });
     return { bucket_key: bucketKey, branch: head, number: created.data.number, url: created.data.html_url };
+}
+
+
+/***/ }),
+
+/***/ 456:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.readPrTemplate = readPrTemplate;
+const node_fs_1 = __importDefault(__nccwpck_require__(24));
+const node_path_1 = __importDefault(__nccwpck_require__(760));
+function readPrTemplate(cwd, templatePath) {
+    const candidates = [];
+    if (templatePath && templatePath.trim()) {
+        candidates.push(templatePath.trim());
+    }
+    else {
+        candidates.push(".github/pull_request_template.md");
+        candidates.push(".github/PULL_REQUEST_TEMPLATE.md");
+        candidates.push("pull_request_template.md");
+    }
+    for (const rel of candidates) {
+        const abs = node_path_1.default.resolve(cwd, rel);
+        if (node_fs_1.default.existsSync(abs) && node_fs_1.default.statSync(abs).isFile()) {
+            return node_fs_1.default.readFileSync(abs, "utf8");
+        }
+    }
+    return null;
 }
 
 
@@ -13307,6 +13356,8 @@ function printHelp() {
         "  --commit-message <msg>        (default: chore: automated changes)",
         "  --pr-title <tpl>              Supports {owners} and {bucket_key}",
         "  --pr-body <tpl>               Supports {owners}, {bucket_key}, {files}",
+        "  --pr-body-mode <mode>         custom|template|template_with_bucket|none (default: custom)",
+        "  --pr-template-path <path>     (default: .github/pull_request_template.md)",
         "  --draft <true|false>          (default: false)",
         "",
         "Examples:",
@@ -13355,6 +13406,8 @@ async function main() {
     let commitMessage = "chore: automated changes";
     let prTitle = "chore: automated changes ({owners})";
     let prBody = "Automated changes bucketed by CODEOWNERS.\n\nOwners: {owners}\nBucket key: {bucket_key}\n\nFiles:\n{files}\n";
+    let prBodyMode = "template";
+    let prTemplatePath = ".github/pull_request_template.md";
     let draft = false;
     // parse args
     for (let i = 0; i < argv.length; i++) {
@@ -13394,6 +13447,10 @@ async function main() {
             prTitle = takeArg(argv, i++, a);
         else if (a === "--pr-body")
             prBody = takeArg(argv, i++, a);
+        else if (a === "--pr-body-mode")
+            prBodyMode = takeArg(argv, i++, a);
+        else if (a === "--pr-template-path")
+            prTemplatePath = takeArg(argv, i++, a);
         else if (a === "--draft")
             draft = (0, buckets_2.parseBool)(takeArg(argv, i++, a));
         else if (a.startsWith("-"))
@@ -13417,6 +13474,8 @@ async function main() {
         commitMessage,
         prTitle,
         prBody,
+        prBodyMode,
+        prTemplatePath,
         draft,
         remoteName: "origin"
     };

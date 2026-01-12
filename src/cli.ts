@@ -31,6 +31,8 @@ function printHelp() {
       "  --commit-message <msg>        (default: chore: automated changes)",
       "  --pr-title <tpl>              Supports {owners} and {bucket_key}",
       "  --pr-body <tpl>               Supports {owners}, {bucket_key}, {files}",
+      "  --pr-body-mode <mode>         custom|template|template_with_bucket|none (default: custom)",
+      "  --pr-template-path <path>     (default: .github/pull_request_template.md)",
       "  --draft <true|false>          (default: false)",
       "",
       "Examples:",
@@ -85,6 +87,8 @@ async function main() {
   let prTitle = "chore: automated changes ({owners})";
   let prBody =
     "Automated changes bucketed by CODEOWNERS.\n\nOwners: {owners}\nBucket key: {bucket_key}\n\nFiles:\n{files}\n";
+  let prBodyMode: SplitConfig["prBodyMode"] = "template";
+  let prTemplatePath = ".github/pull_request_template.md";
   let draft = false;
 
   // parse args
@@ -109,6 +113,8 @@ async function main() {
     else if (a === "--commit-message") commitMessage = takeArg(argv, i++, a);
     else if (a === "--pr-title") prTitle = takeArg(argv, i++, a);
     else if (a === "--pr-body") prBody = takeArg(argv, i++, a);
+    else if (a === "--pr-body-mode") prBodyMode = takeArg(argv, i++, a) as SplitConfig["prBodyMode"];
+    else if (a === "--pr-template-path") prTemplatePath = takeArg(argv, i++, a);
     else if (a === "--draft") draft = parseBool(takeArg(argv, i++, a));
     else if (a.startsWith("-")) throw new Error(`Unknown arg: ${a}`);
   }
@@ -131,6 +137,8 @@ async function main() {
     commitMessage,
     prTitle,
     prBody,
+    prBodyMode,
+    prTemplatePath,
     draft,
     remoteName: "origin"
   };

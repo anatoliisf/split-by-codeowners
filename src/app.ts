@@ -17,6 +17,7 @@ import {
 } from "./git";
 import { getDefaultBranch, getOctokit, upsertPullRequest } from "./github";
 import { assertGhAuthenticated, getDefaultBranchViaGh, upsertPullRequestViaGh } from "./ghcli";
+import { readPrTemplate } from "./pr-template";
 import type { Bucket, Logger, PullRequestInfo, SplitConfig, SplitResult } from "./types";
 
 function formatTemplate(tpl: string, vars: Record<string, string>) {
@@ -151,8 +152,25 @@ export async function runSplit(config: SplitConfig, logger: Logger): Promise<Spl
 
         const ownersStr = b.owners.length ? b.owners.join(", ") : "(unowned)";
         const filesStr = b.files.map(f => `- ${f.file}`).join("\n");
+        const bucketInfo = formatTemplate(
+          "Automated changes bucketed by CODEOWNERS.\n\nOwners: {owners}\nBucket key: {bucket_key}\n\nFiles:\n{files}\n",
+          { owners: ownersStr, bucket_key: b.key, files: filesStr }
+        );
+
         const title = formatTemplate(config.prTitle, { owners: ownersStr, bucket_key: b.key });
-        const body = formatTemplate(config.prBody, { owners: ownersStr, bucket_key: b.key, files: filesStr });
+
+        let body: string | undefined;
+        if (config.prBodyMode === "none") {
+          body = undefined;
+        } else if (config.prBodyMode === "custom") {
+          body = formatTemplate(config.prBody, { owners: ownersStr, bucket_key: b.key, files: filesStr });
+        } else {
+          const template = readPrTemplate(worktreeDir, config.prTemplatePath) ?? "";
+          body =
+            config.prBodyMode === "template_with_bucket"
+              ? (template ? template.trimEnd() + "\n\n---\n\n" + bucketInfo : bucketInfo)
+              : (template || bucketInfo);
+        }
 
         const pr = useGhCli
           ? (() => {
@@ -161,7 +179,7 @@ export async function runSplit(config: SplitConfig, logger: Logger): Promise<Spl
                 base: baseBranch,
                 head: branch,
                 title,
-                body,
+                body: body ?? "",
                 draft: config.draft,
                 bucketKey: b.key
               });
@@ -172,7 +190,7 @@ export async function runSplit(config: SplitConfig, logger: Logger): Promise<Spl
               base: baseBranch,
               head: branch,
               title,
-              body,
+              body: body ?? "",
               draft: config.draft,
               bucketKey: b.key
             });

@@ -45,6 +45,8 @@ export type SplitConfig = {
   commitMessage: string;
   prTitle: string;
   prBody: string;
+  prBodyMode: "custom" | "template" | "template_with_bucket" | "none";
+  prTemplatePath: string;
   draft: boolean;
   remoteName: string;
 };

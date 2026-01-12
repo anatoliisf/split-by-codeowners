@@ -50,7 +50,7 @@ export async function upsertPullRequest(params: {
     head,
     base,
     title,
-    body,
+    body: body || "",
     draft
   });
 

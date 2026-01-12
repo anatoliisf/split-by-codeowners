@@ -28,6 +28,8 @@ async function run() {
       prBody:
         core.getInput("pr_body") ||
         "Automated changes bucketed by CODEOWNERS.\n\nOwners: {owners}\nBucket key: {bucket_key}\n\nFiles:\n{files}\n",
+      prBodyMode: (core.getInput("pr_body_mode") || "custom") as SplitConfig["prBodyMode"],
+      prTemplatePath: core.getInput("pr_template_path") || ".github/pull_request_template.md",
       draft: parseBool(core.getInput("draft")),
       remoteName: "origin",
     };

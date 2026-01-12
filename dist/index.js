@@ -27470,6 +27470,7 @@ const codeowners_1 = __nccwpck_require__(3586);
 const git_1 = __nccwpck_require__(1243);
 const github_1 = __nccwpck_require__(9248);
 const ghcli_1 = __nccwpck_require__(8064);
+const pr_template_1 = __nccwpck_require__(2456);
 function formatTemplate(tpl, vars) {
     let out = tpl;
     for (const [k, v] of Object.entries(vars))
@@ -27589,8 +27590,22 @@ async function runSplit(config, logger) {
                 (0, git_1.pushBranch)(config.remoteName, branch, worktreeDir);
                 const ownersStr = b.owners.length ? b.owners.join(", ") : "(unowned)";
                 const filesStr = b.files.map(f => `- ${f.file}`).join("\n");
+                const bucketInfo = formatTemplate("Automated changes bucketed by CODEOWNERS.\n\nOwners: {owners}\nBucket key: {bucket_key}\n\nFiles:\n{files}\n", { owners: ownersStr, bucket_key: b.key, files: filesStr });
                 const title = formatTemplate(config.prTitle, { owners: ownersStr, bucket_key: b.key });
-                const body = formatTemplate(config.prBody, { owners: ownersStr, bucket_key: b.key, files: filesStr });
+                let body;
+                if (config.prBodyMode === "none") {
+                    body = undefined;
+                }
+                else if (config.prBodyMode === "custom") {
+                    body = formatTemplate(config.prBody, { owners: ownersStr, bucket_key: b.key, files: filesStr });
+                }
+                else {
+                    const template = (0, pr_template_1.readPrTemplate)(worktreeDir, config.prTemplatePath) ?? "";
+                    body =
+                        config.prBodyMode === "template_with_bucket"
+                            ? (template ? template.trimEnd() + "\n\n---\n\n" + bucketInfo : bucketInfo)
+                            : (template || bucketInfo);
+                }
                 const pr = useGhCli
                     ? (() => {
                         return (0, ghcli_1.upsertPullRequestViaGh)({
@@ -27598,7 +27613,7 @@ async function runSplit(config, logger) {
                             base: baseBranch,
                             head: branch,
                             title,
-                            body,
+                            body: body ?? "",
                             draft: config.draft,
                             bucketKey: b.key
                         });
@@ -27609,7 +27624,7 @@ async function runSplit(config, logger) {
                         base: baseBranch,
                         head: branch,
                         title,
-                        body,
+                        body: body ?? "",
                         draft: config.draft,
                         bucketKey: b.key
                     });
@@ -28110,7 +28125,7 @@ async function upsertPullRequest(params) {
         head,
         base,
         title,
-        body,
+        body: body || "",
         draft
     });
     return { bucket_key: bucketKey, branch: head, number: created.data.number, url: created.data.html_url };
@@ -28182,6 +28197,8 @@ async function run() {
             prTitle: core.getInput("pr_title") || "chore: automated changes ({owners})",
             prBody: core.getInput("pr_body") ||
                 "Automated changes bucketed by CODEOWNERS.\n\nOwners: {owners}\nBucket key: {bucket_key}\n\nFiles:\n{files}\n",
+            prBodyMode: (core.getInput("pr_body_mode") || "custom"),
+            prTemplatePath: core.getInput("pr_template_path") || ".github/pull_request_template.md",
             draft: (0, buckets_1.parseBool)(core.getInput("draft")),
             remoteName: "origin",
         };
@@ -28196,6 +28213,40 @@ async function run() {
     }
 }
 run();
+
+
+/***/ }),
+
+/***/ 2456:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.readPrTemplate = readPrTemplate;
+const node_fs_1 = __importDefault(__nccwpck_require__(3024));
+const node_path_1 = __importDefault(__nccwpck_require__(6760));
+function readPrTemplate(cwd, templatePath) {
+    const candidates = [];
+    if (templatePath && templatePath.trim()) {
+        candidates.push(templatePath.trim());
+    }
+    else {
+        candidates.push(".github/pull_request_template.md");
+        candidates.push(".github/PULL_REQUEST_TEMPLATE.md");
+        candidates.push("pull_request_template.md");
+    }
+    for (const rel of candidates) {
+        const abs = node_path_1.default.resolve(cwd, rel);
+        if (node_fs_1.default.existsSync(abs) && node_fs_1.default.statSync(abs).isFile()) {
+            return node_fs_1.default.readFileSync(abs, "utf8");
+        }
+    }
+    return null;
+}
 
 
 /***/ }),
