@@ -94,7 +94,7 @@ inputs:
   pr_body_mode:
     description: "PR body mode for PR creation: custom | template | template_with_bucket | none"
     required: false
-    default: "custom"
+    default: "template"
 
   pr_template_path:
     description: "Path to pull request template file (used when pr_body_mode=template*)."
