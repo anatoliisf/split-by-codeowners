@@ -24,8 +24,7 @@ function printHelp() {
       "  --dry-run                     Compute buckets, don't write patches",
       "",
       "PR creation:",
-      "  --create-prs                  Push branches + create/update PRs (requires token)",
-      "  --token <token>               GitHub token (or env GITHUB_TOKEN / GH_TOKEN)",
+      "  --create-prs                  Push branches + create/update PRs (uses `gh` auth locally; token in CI)",
       "  --base-branch <branch>        Base branch for PRs (default: repo default)",
       "  --branch-prefix <prefix>      (default: codemods/)",
       "  --commit-message <msg>        (default: chore: automated changes)",
@@ -37,7 +36,7 @@ function printHelp() {
       "",
       "Examples:",
       "  npx split-by-codeowners --exclude - < excludes.txt",
-      "  npx split-by-codeowners --create-prs --token $GH_TOKEN --base-branch main",
+      "  npx split-by-codeowners --create-prs --base-branch main",
       ""
     ].join("\n")
   );
@@ -80,7 +79,6 @@ async function main() {
   let cleanupPatches = true;
 
   let createPrs = false;
-  let githubToken = "";
   let baseBranch = "";
   let branchPrefix = "codemods/";
   let commitMessage = "chore: automated changes";
@@ -107,7 +105,6 @@ async function main() {
     else if (a === "--dry-run") dryRun = true;
     else if (a === "--cleanup-patches") cleanupPatches = true;
     else if (a === "--create-prs") createPrs = true;
-    else if (a === "--token") githubToken = takeArg(argv, i++, a);
     else if (a === "--base-branch") baseBranch = takeArg(argv, i++, a);
     else if (a === "--branch-prefix") branchPrefix = takeArg(argv, i++, a);
     else if (a === "--commit-message") commitMessage = takeArg(argv, i++, a);
@@ -131,7 +128,7 @@ async function main() {
     cleanupPatches,
     baseRef: "",
     createPrs,
-    githubToken,
+    githubToken: "",
     baseBranch,
     branchPrefix,
     commitMessage,

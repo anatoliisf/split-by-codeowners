@@ -32,7 +32,6 @@ steps:
   - name: Split into CODEOWNERS PRs
     uses: anatoliisf/split-by-codeowners@v1
     with:
-      create_prs: "true"
       github_token: ${{ github.token }}
 ```
 
@@ -55,34 +54,34 @@ npx split-by-codeowners --create-prs --base-branch main
 
 ### Inputs
 
-| Name | Required | Default | Description |
-| --- | --- | --- | --- |
-| `codeowners_path` | no | `CODEOWNERS` | Path to CODEOWNERS file |
-| `base_ref` | no | `""` | Base ref for changed-files discovery (currently workspace-focused; see notes) |
-| `include_unowned` | no | `"true"` | Include files with no owners in a special bucket |
-| `unowned_bucket_key` | no | `__UNOWNED__` | Bucket key for unowned files |
-| `max_buckets` | no | `"30"` | Fail if buckets exceed this number |
-| `exclude_patterns` | no | `""` | Newline-separated glob patterns to exclude (minimatch) |
-| `patch_dir` | no | `bucket-patches` | Directory to write per-bucket patch files |
-| `bucket_prefix` | no | `bucket` | Patch file prefix |
-| `dry_run` | no | `"false"` | Compute buckets but don’t write patches |
-| `cleanup_patches` | no | `"false"` | Delete `patch_dir` after a successful run |
-| `create_prs` | no | `"false"` | Create/update one PR per bucket |
-| `github_token` | no | `""` | Token used for pushing branches + GitHub API (defaults to env `GITHUB_TOKEN`) |
-| `base_branch` | no | `""` | Base branch for PRs (defaults to repo default branch) |
-| `branch_prefix` | no | `codemods/` | Prefix for created branches |
-| `commit_message` | no | `chore: automated changes` | Commit message for bucket PRs |
-| `pr_title` | no | `chore: automated changes ({owners})` | PR title template (`{owners}`, `{bucket_key}`) |
-| `pr_body` | no | *(see `action.yml`)* | PR body template (`{owners}`, `{bucket_key}`, `{files}`) |
-| `draft` | no | `"false"` | Create PRs as drafts |
+| Name                 | Required | Default                               | Description                                                                   |
+| -------------------- | -------- | ------------------------------------- | ----------------------------------------------------------------------------- |
+| `codeowners_path`    | no       | `CODEOWNERS`                          | Path to CODEOWNERS file                                                       |
+| `base_ref`           | no       | `""`                                  | Base ref for changed-files discovery (currently workspace-focused; see notes) |
+| `include_unowned`    | no       | `"true"`                              | Include files with no owners in a special bucket                              |
+| `unowned_bucket_key` | no       | `__UNOWNED__`                         | Bucket key for unowned files                                                  |
+| `max_buckets`        | no       | `"30"`                                | Fail if buckets exceed this number                                            |
+| `exclude_patterns`   | no       | `""`                                  | Newline-separated glob patterns to exclude (minimatch)                        |
+| `patch_dir`          | no       | `bucket-patches`                      | Directory to write per-bucket patch files                                     |
+| `bucket_prefix`      | no       | `bucket`                              | Patch file prefix                                                             |
+| `dry_run`            | no       | `"false"`                             | Compute buckets but don’t write patches                                       |
+| `cleanup_patches`    | no       | `"false"`                             | Delete `patch_dir` after a successful run                                     |
+| `create_prs`         | no       | `"false"`                             | Create/update one PR per bucket                                               |
+| `github_token`       | no       | `""`                                  | Token used for pushing branches + GitHub API (defaults to env `GITHUB_TOKEN`) |
+| `base_branch`        | no       | `""`                                  | Base branch for PRs (defaults to repo default branch)                         |
+| `branch_prefix`      | no       | `codemods/`                           | Prefix for created branches                                                   |
+| `commit_message`     | no       | `chore: automated changes`            | Commit message for bucket PRs                                                 |
+| `pr_title`           | no       | `chore: automated changes ({owners})` | PR title template (`{owners}`, `{bucket_key}`)                                |
+| `pr_body`            | no       | *(see `action.yml`)*                  | PR body template (`{owners}`, `{bucket_key}`, `{files}`)                      |
+| `draft`              | no       | `"false"`                             | Create PRs as drafts                                                          |
 
 ### Outputs
 
-| Name | Description |
-| --- | --- |
-| `matrix_json` | JSON for `strategy.matrix` (`{ include: [...] }`) |
+| Name           | Description                                       |
+| -------------- | ------------------------------------------------- |
+| `matrix_json`  | JSON for `strategy.matrix` (`{ include: [...] }`) |
 | `buckets_json` | Full buckets JSON (owners + files + matched rule) |
-| `prs_json` | If `create_prs=true`, list of created/updated PRs |
+| `prs_json`     | If `create_prs=true`, list of created/updated PRs |
 
 ### Example: bucketize only (matrix + patches)
 
@@ -117,6 +116,32 @@ The CLI operates on your **current working tree** (modified + untracked files) a
 npx split-by-codeowners --help
 ```
 
+### Options
+
+#### Common
+
+- **`--codeowners <path>`**: Path to CODEOWNERS file (default: `CODEOWNERS`)
+- **`--exclude <file|->`**: File containing newline-separated glob patterns to exclude, or `-` to read from stdin
+- **`--include-unowned <true|false>`**: Include files with no owners in an `__UNOWNED__` bucket (default: `true`)
+- **`--unowned-bucket-key <key>`**: Bucket key for unowned files (default: `__UNOWNED__`)
+- **`--max-buckets <n>`**: Fail if number of buckets exceeds `n` (default: `30`)
+- **`--patch-dir <dir>`**: Directory to write patch files (default: `bucket-patches`)
+- **`--bucket-prefix <prefix>`**: Patch file prefix (default: `bucket`)
+- **`--dry-run`**: Compute buckets but don’t write patches
+- **`--cleanup-patches`**: Delete `patch_dir` after a successful run (default in this repo: enabled)
+
+#### PR creation
+
+- **`--create-prs`**: Create/update one PR per bucket (local: uses `gh` auth)
+- **`--base-branch <branch>`**: Base branch for PRs (default: repo default branch)
+- **`--branch-prefix <prefix>`**: Branch prefix for bucket branches (default: `codemods/`)
+- **`--commit-message <msg>`**: Commit message for bucket commits
+- **`--pr-title <tpl>`**: Title template (supports `{owners}`, `{bucket_key}`)
+- **`--pr-body <tpl>`**: Body template (supports `{owners}`, `{bucket_key}`, `{files}`)
+- **`--pr-body-mode <mode>`**: `custom|template|template_with_bucket|none`
+- **`--pr-template-path <path>`**: PR template file path (used when `pr_body_mode=template*`)
+- **`--draft <true|false>`**: Create PRs as drafts (default: `false`)
+
 ### Common examples
 
 Exclude some paths:
@@ -131,11 +156,10 @@ Create/update PRs:
 npx split-by-codeowners --create-prs --base-branch main
 ```
 
-Force token auth locally (instead of `gh`):
+Use the repo PR template for PR creation (recommended):
 
 ```bash
-export GH_TOKEN=...
-npx split-by-codeowners --create-prs --token "$GH_TOKEN" --base-branch main
+npx split-by-codeowners --create-prs --pr-body-mode template_with_bucket
 ```
 
 ### Notes on local PR creation
@@ -176,6 +200,5 @@ npm run build
 
 This repo includes a manual workflow: `.github/workflows/publish-npm.yml`.
 
-- Create an npm token with publish rights and add it as repo secret **`NPM_TOKEN`**.
 - Bump `package.json` version and ensure `dist/` and `dist-cli/` are up to date.
 - Run the workflow from the GitHub Actions UI (`workflow_dispatch`).

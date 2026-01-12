@@ -59,7 +59,7 @@ inputs:
   create_prs:
     description: "If true, create/update one PR per bucket by pushing branches and calling GitHub API."
     required: false
-    default: "false"
+    default: "true"
 
   github_token:
     description: "GitHub token used for API + pushing branches. Defaults to GITHUB_TOKEN."

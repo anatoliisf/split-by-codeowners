@@ -1901,34 +1901,18 @@ async function runSplit(config, logger) {
         const isGitHubActions = process.env.GITHUB_ACTIONS === "true";
         // Auth mode selection:
         // - In GitHub Actions: ALWAYS use token-based API (gh may not be installed/auth'd).
-        // - Locally: prefer gh CLI for best DevX, but if gh isn't auth'd and a token is available, fall back to token.
-        if (isGitHubActions && !token) {
-            throw new Error("Missing GitHub token (set github_token input or GITHUB_TOKEN / GH_TOKEN env var)");
-        }
-        let useGhCli = !isGitHubActions;
-        let octokit = useGhCli ? null : (0, github_1.getOctokit)(token);
-        let baseBranch;
-        if (useGhCli) {
-            try {
-                const cwd = process.cwd();
-                (0, ghcli_1.assertGhAuthenticated)(cwd);
-                baseBranch = config.baseBranch || (0, ghcli_1.getDefaultBranchViaGh)(cwd);
-            }
-            catch (e) {
-                if (token) {
-                    logger.warn("gh is not authenticated; falling back to token auth.");
-                    useGhCli = false;
-                    octokit = (0, github_1.getOctokit)(token);
-                    baseBranch = config.baseBranch || (await (0, github_1.getDefaultBranch)(octokit, repo));
-                }
-                else {
-                    throw e;
-                }
+        // - Locally: ALWAYS use gh CLI for best DevX (no token-based local mode).
+        if (isGitHubActions) {
+            if (!token) {
+                throw new Error("Missing GitHub token (set github_token input or GITHUB_TOKEN / GH_TOKEN env var)");
             }
         }
         else {
-            baseBranch = config.baseBranch || (await (0, github_1.getDefaultBranch)(octokit, repo));
+            (0, ghcli_1.assertGhAuthenticated)(process.cwd());
         }
+        const useGhCli = !isGitHubActions;
+        const octokit = useGhCli ? null : (0, github_1.getOctokit)(token);
+        const baseBranch = config.baseBranch || (useGhCli ? (0, ghcli_1.getDefaultBranchViaGh)(process.cwd()) : await (0, github_1.getDefaultBranch)(octokit, repo));
         const baseRef = "HEAD";
         ensureDirExists((0, git_1.worktreeBaseDir)());
         prs = [];
@@ -13349,8 +13333,7 @@ function printHelp() {
         "  --dry-run                     Compute buckets, don't write patches",
         "",
         "PR creation:",
-        "  --create-prs                  Push branches + create/update PRs (requires token)",
-        "  --token <token>               GitHub token (or env GITHUB_TOKEN / GH_TOKEN)",
+        "  --create-prs                  Push branches + create/update PRs (uses `gh` auth locally; token in CI)",
         "  --base-branch <branch>        Base branch for PRs (default: repo default)",
         "  --branch-prefix <prefix>      (default: codemods/)",
         "  --commit-message <msg>        (default: chore: automated changes)",
@@ -13362,7 +13345,7 @@ function printHelp() {
         "",
         "Examples:",
         "  npx split-by-codeowners --exclude - < excludes.txt",
-        "  npx split-by-codeowners --create-prs --token $GH_TOKEN --base-branch main",
+        "  npx split-by-codeowners --create-prs --base-branch main",
         ""
     ].join("\n"));
 }
@@ -13400,7 +13383,6 @@ async function main() {
     let dryRun = false;
     let cleanupPatches = true;
     let createPrs = false;
-    let githubToken = "";
     let baseBranch = "";
     let branchPrefix = "codemods/";
     let commitMessage = "chore: automated changes";
@@ -13435,8 +13417,6 @@ async function main() {
             cleanupPatches = true;
         else if (a === "--create-prs")
             createPrs = true;
-        else if (a === "--token")
-            githubToken = takeArg(argv, i++, a);
         else if (a === "--base-branch")
             baseBranch = takeArg(argv, i++, a);
         else if (a === "--branch-prefix")
@@ -13468,7 +13448,7 @@ async function main() {
         cleanupPatches,
         baseRef: "",
         createPrs,
-        githubToken,
+        githubToken: "",
         baseBranch,
         branchPrefix,
         commitMessage,

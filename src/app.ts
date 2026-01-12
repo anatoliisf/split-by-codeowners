@@ -98,33 +98,18 @@ export async function runSplit(config: SplitConfig, logger: Logger): Promise<Spl
     const isGitHubActions = process.env.GITHUB_ACTIONS === "true";
     // Auth mode selection:
     // - In GitHub Actions: ALWAYS use token-based API (gh may not be installed/auth'd).
-    // - Locally: prefer gh CLI for best DevX, but if gh isn't auth'd and a token is available, fall back to token.
-    if (isGitHubActions && !token) {
-      throw new Error("Missing GitHub token (set github_token input or GITHUB_TOKEN / GH_TOKEN env var)");
-    }
-
-    let useGhCli = !isGitHubActions;
-    let octokit = useGhCli ? null : getOctokit(token);
-
-    let baseBranch: string;
-    if (useGhCli) {
-      try {
-        const cwd = process.cwd();
-        assertGhAuthenticated(cwd);
-        baseBranch = config.baseBranch || getDefaultBranchViaGh(cwd);
-      } catch (e) {
-        if (token) {
-          logger.warn("gh is not authenticated; falling back to token auth.");
-          useGhCli = false;
-          octokit = getOctokit(token);
-          baseBranch = config.baseBranch || (await getDefaultBranch(octokit, repo));
-        } else {
-          throw e;
-        }
+    // - Locally: ALWAYS use gh CLI for best DevX (no token-based local mode).
+    if (isGitHubActions) {
+      if (!token) {
+        throw new Error("Missing GitHub token (set github_token input or GITHUB_TOKEN / GH_TOKEN env var)");
       }
     } else {
-      baseBranch = config.baseBranch || (await getDefaultBranch(octokit!, repo));
+      assertGhAuthenticated(process.cwd());
     }
+
+    const useGhCli = !isGitHubActions;
+    const octokit = useGhCli ? null : getOctokit(token);
+    const baseBranch = config.baseBranch || (useGhCli ? getDefaultBranchViaGh(process.cwd()) : await getDefaultBranch(octokit!, repo));
 
     const baseRef = "HEAD";
 
