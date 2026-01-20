@@ -66,7 +66,7 @@ npx split-by-codeowners --create-prs --base-branch main
 | `bucket_prefix`      | no       | `bucket`                              | Patch file prefix                                                             |
 | `dry_run`            | no       | `"false"`                             | Compute buckets but don’t write patches                                       |
 | `cleanup_patches`    | no       | `"false"`                             | Delete `patch_dir` after a successful run                                     |
-| `create_prs`         | no       | `"false"`                             | Create/update one PR per bucket                                               |
+| `create_prs`         | no       | `"true"`                              | Create/update one PR per bucket                                               |
 | `github_token`       | no       | `""`                                  | Token used for pushing branches + GitHub API (defaults to env `GITHUB_TOKEN`) |
 | `base_branch`        | no       | `""`                                  | Base branch for PRs (defaults to repo default branch)                         |
 | `branch_prefix`      | no       | `codemods/`                           | Prefix for created branches                                                   |
@@ -90,7 +90,7 @@ npx split-by-codeowners --create-prs --base-branch main
   id: split
   uses: anatoliisf/split-by-codeowners@v1
   with:
-    create_prs: "false"
+    draft: "true"
 
 - name: Use matrix
   run: echo '${{ steps.split.outputs.matrix_json }}'
