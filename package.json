@@ -1,6 +1,6 @@
 {
 	"name": "split-by-codeowners",
-	"version": "1.0.5",
+	"version": "1.1.0",
 	"description": "Split local changes into CODEOWNERS buckets and (optionally) create one PR per bucket (CLI + GitHub Action).",
 	"repository": {
 		"type": "git",
