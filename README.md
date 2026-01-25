@@ -56,6 +56,7 @@ npx split-by-codeowners --create-prs --base-branch main
 
 | Name                 | Required | Default                               | Description                                                                   |
 | -------------------- | -------- | ------------------------------------- | ----------------------------------------------------------------------------- |
+| `repo_path`          | no       | `.`                                   | Repo root path relative to `GITHUB_WORKSPACE`                                 |
 | `codeowners_path`    | no       | `CODEOWNERS`                          | Path to CODEOWNERS file                                                       |
 | `base_ref`           | no       | `""`                                  | Base ref for changed-files discovery (currently workspace-focused; see notes) |
 | `include_unowned`    | no       | `"true"`                              | Include files with no owners in a special bucket                              |
@@ -120,6 +121,7 @@ npx split-by-codeowners --help
 
 #### Common
 
+- **`--repo-path <path>`**: Repo root path (relative to current working directory)
 - **`--codeowners <path>`**: Path to CODEOWNERS file (default: `CODEOWNERS`)
 - **`--exclude <file|->`**: File containing newline-separated glob patterns to exclude, or `-` to read from stdin
 - **`--include-unowned <true|false>`**: Include files with no owners in an `__UNOWNED__` bucket (default: `true`)

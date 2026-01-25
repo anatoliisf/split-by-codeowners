@@ -1841,118 +1841,140 @@ function ensureDirExists(dir) {
         (0, buckets_1.ensureDir)(dir);
 }
 async function runSplit(config, logger) {
-    if (config.createPrs && config.dryRun) {
-        throw new Error("create_prs=true requires dry_run=false (we need patch files to create bucket branches/PRs).");
+    const originalCwd = process.cwd();
+    let resolvedRepoPath;
+    if (config.repoPath) {
+        resolvedRepoPath = node_path_1.default.resolve(originalCwd, config.repoPath);
+        if (!node_fs_1.default.existsSync(resolvedRepoPath)) {
+            throw new Error(`repo_path does not exist: ${resolvedRepoPath}`);
+        }
+        process.chdir(resolvedRepoPath);
+        logger.info(`Using repo_path: ${resolvedRepoPath}`);
     }
-    // 1) discover + filter changed files
-    const changed = (0, git_1.getChangedFiles)(config.baseRef);
-    const filtered = (0, buckets_1.applyExcludes)(changed, config.excludePatterns);
-    logger.info(`Changed files: ${changed.length} (after excludes: ${filtered.length})`);
-    if (!filtered.length) {
-        return { buckets: [], matrix: { include: [] }, prs: [] };
-    }
-    // 2) parse CODEOWNERS + bucketize by owners-set
-    const rules = (0, codeowners_1.parseCodeowners)(config.codeownersPath);
-    const bucketsMap = new Map();
-    for (const file of filtered) {
-        const { owners, rule } = (0, codeowners_1.ownersForFile)(file, rules);
-        const sortedOwners = (owners ?? []).slice().sort();
-        const isUnowned = sortedOwners.length === 0;
-        if (isUnowned && !config.includeUnowned)
-            continue;
-        const key = isUnowned
-            ? config.unownedBucketKey
-            : sortedOwners.join("|").replaceAll("@", "").replaceAll("/", "-").replaceAll(" ", "");
-        const existing = bucketsMap.get(key);
-        if (!existing) {
-            bucketsMap.set(key, {
-                key,
-                owners: sortedOwners,
-                files: [{ file, owners: sortedOwners, rule }]
+    try {
+        if (config.createPrs && config.dryRun) {
+            throw new Error("create_prs=true requires dry_run=false (we need patch files to create bucket branches/PRs).");
+        }
+        // 1) discover + filter changed files
+        const changed = (0, git_1.getChangedFiles)(config.baseRef);
+        const filtered = (0, buckets_1.applyExcludes)(changed, config.excludePatterns);
+        logger.info(`Changed files: ${changed.length} (after excludes: ${filtered.length})`);
+        if (!filtered.length) {
+            return { buckets: [], matrix: { include: [] }, prs: [] };
+        }
+        // 2) parse CODEOWNERS + bucketize by owners-set
+        const rules = (0, codeowners_1.parseCodeowners)(config.codeownersPath);
+        const bucketsMap = new Map();
+        for (const file of filtered) {
+            const { owners, rule } = (0, codeowners_1.ownersForFile)(file, rules);
+            const sortedOwners = (owners ?? []).slice().sort();
+            const isUnowned = sortedOwners.length === 0;
+            if (isUnowned && !config.includeUnowned)
+                continue;
+            const key = isUnowned
+                ? config.unownedBucketKey
+                : sortedOwners.join("|").replaceAll("@", "").replaceAll("/", "-").replaceAll(" ", "");
+            const existing = bucketsMap.get(key);
+            if (!existing) {
+                bucketsMap.set(key, {
+                    key,
+                    owners: sortedOwners,
+                    files: [{ file, owners: sortedOwners, rule }]
+                });
+            }
+            else {
+                existing.files.push({ file, owners: sortedOwners, rule });
+            }
+        }
+        const buckets = [...bucketsMap.values()].sort((a, b) => a.key.localeCompare(b.key));
+        if (buckets.length > config.maxBuckets) {
+            throw new Error(`Too many buckets: ${buckets.length} > max_buckets=${config.maxBuckets}`);
+        }
+        // 3) write per-bucket patches
+        if (!config.dryRun) {
+            ensureDirExists(config.patchDir);
+            buckets.forEach((b, idx) => {
+                const patchPath = node_path_1.default.posix.join(config.patchDir.replaceAll("\\", "/"), `${config.bucketPrefix}-${idx + 1}.patch`);
+                const paths = b.files.map((f) => f.file);
+                logger.info(`Writing ${patchPath} (${paths.length} files) for bucket=${b.key}`);
+                (0, git_1.writePatchForPaths)(patchPath, paths);
             });
         }
         else {
-            existing.files.push({ file, owners: sortedOwners, rule });
+            logger.info("dry_run=true; not generating patches.");
         }
-    }
-    const buckets = [...bucketsMap.values()].sort((a, b) => a.key.localeCompare(b.key));
-    if (buckets.length > config.maxBuckets) {
-        throw new Error(`Too many buckets: ${buckets.length} > max_buckets=${config.maxBuckets}`);
-    }
-    // 3) write per-bucket patches
-    if (!config.dryRun) {
-        ensureDirExists(config.patchDir);
-        buckets.forEach((b, idx) => {
-            const patchPath = node_path_1.default.posix.join(config.patchDir.replaceAll("\\", "/"), `${config.bucketPrefix}-${idx + 1}.patch`);
-            const paths = b.files.map((f) => f.file);
-            logger.info(`Writing ${patchPath} (${paths.length} files) for bucket=${b.key}`);
-            (0, git_1.writePatchForPaths)(patchPath, paths);
-        });
-    }
-    else {
-        logger.info("dry_run=true; not generating patches.");
-    }
-    const matrix = (0, buckets_1.toMatrix)(buckets, config.patchDir, config.bucketPrefix);
-    // 4) optionally create PRs (worktrees so we don't disturb the current working tree)
-    let prs = undefined;
-    if (config.createPrs) {
-        const token = config.githubToken || process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
-        const repo = config.repo ?? (0, git_1.parseGitHubRemote)((0, git_1.getRemoteUrl)(config.remoteName));
-        const isGitHubActions = process.env.GITHUB_ACTIONS === "true";
-        // Auth mode selection:
-        // - In GitHub Actions: ALWAYS use token-based API (gh may not be installed/auth'd).
-        // - Locally: ALWAYS use gh CLI for best DevX (no token-based local mode).
-        if (isGitHubActions) {
-            if (!token) {
-                throw new Error("Missing GitHub token (set github_token input or GITHUB_TOKEN / GH_TOKEN env var)");
+        const matrix = (0, buckets_1.toMatrix)(buckets, config.patchDir, config.bucketPrefix);
+        // 4) optionally create PRs (worktrees so we don't disturb the current working tree)
+        let prs = undefined;
+        if (config.createPrs) {
+            const token = config.githubToken || process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
+            const repo = config.repo ?? (0, git_1.parseGitHubRemote)((0, git_1.getRemoteUrl)(config.remoteName));
+            const isGitHubActions = process.env.GITHUB_ACTIONS === "true";
+            // Auth mode selection:
+            // - In GitHub Actions: ALWAYS use token-based API (gh may not be installed/auth'd).
+            // - Locally: ALWAYS use gh CLI for best DevX (no token-based local mode).
+            if (isGitHubActions) {
+                if (!token) {
+                    throw new Error("Missing GitHub token (set github_token input or GITHUB_TOKEN / GH_TOKEN env var)");
+                }
             }
-        }
-        else {
-            (0, ghcli_1.assertGhAuthenticated)(process.cwd());
-        }
-        const useGhCli = !isGitHubActions;
-        const octokit = useGhCli ? null : (0, github_1.getOctokit)(token);
-        const baseBranch = config.baseBranch || (useGhCli ? (0, ghcli_1.getDefaultBranchViaGh)(process.cwd()) : await (0, github_1.getDefaultBranch)(octokit, repo));
-        const baseRef = "HEAD";
-        ensureDirExists((0, git_1.worktreeBaseDir)());
-        prs = [];
-        for (let i = 0; i < buckets.length; i++) {
-            const b = buckets[i];
-            const patchPath = node_path_1.default.posix.join(config.patchDir.replaceAll("\\", "/"), `${config.bucketPrefix}-${i + 1}.patch`);
-            const branch = `${config.branchPrefix}${b.key}`.replaceAll(" ", "");
-            const worktreeDir = (0, git_1.tempDirForBucket)(b.key);
-            logger.info(`Creating PR for bucket=${b.key} on branch=${branch}`);
-            (0, git_1.worktreeAdd)(branch, baseRef, worktreeDir);
-            try {
-                (0, git_1.applyPatch)(patchPath, worktreeDir);
-                const committed = (0, git_1.commitAllStaged)(config.commitMessage, worktreeDir);
-                if (!committed) {
-                    logger.warn(`No staged changes for bucket=${b.key}; skipping push/PR.`);
-                    continue;
-                }
-                (0, git_1.pushBranch)(config.remoteName, branch, worktreeDir);
-                const ownersStr = b.owners.length ? b.owners.join(", ") : "(unowned)";
-                const filesStr = b.files.map(f => `- ${f.file}`).join("\n");
-                const bucketInfo = formatTemplate("Automated changes bucketed by CODEOWNERS.\n\nOwners: {owners}\nBucket key: {bucket_key}\n\nFiles:\n{files}\n", { owners: ownersStr, bucket_key: b.key, files: filesStr });
-                const title = formatTemplate(config.prTitle, { owners: ownersStr, bucket_key: b.key });
-                let body;
-                if (config.prBodyMode === "none") {
-                    body = undefined;
-                }
-                else if (config.prBodyMode === "custom") {
-                    body = formatTemplate(config.prBody, { owners: ownersStr, bucket_key: b.key, files: filesStr });
-                }
-                else {
-                    const template = (0, pr_template_1.readPrTemplate)(worktreeDir, config.prTemplatePath) ?? "";
-                    body =
-                        config.prBodyMode === "template_with_bucket"
-                            ? (template ? template.trimEnd() + "\n\n---\n\n" + bucketInfo : bucketInfo)
-                            : (template || bucketInfo);
-                }
-                const pr = useGhCli
-                    ? (() => {
-                        return (0, ghcli_1.upsertPullRequestViaGh)({
-                            cwd: worktreeDir,
+            else {
+                (0, ghcli_1.assertGhAuthenticated)(process.cwd());
+            }
+            const useGhCli = !isGitHubActions;
+            const octokit = useGhCli ? null : (0, github_1.getOctokit)(token);
+            const baseBranch = config.baseBranch || (useGhCli ? (0, ghcli_1.getDefaultBranchViaGh)(process.cwd()) : await (0, github_1.getDefaultBranch)(octokit, repo));
+            const baseRef = "HEAD";
+            ensureDirExists((0, git_1.worktreeBaseDir)());
+            prs = [];
+            for (let i = 0; i < buckets.length; i++) {
+                const b = buckets[i];
+                const patchPath = node_path_1.default.posix.join(config.patchDir.replaceAll("\\", "/"), `${config.bucketPrefix}-${i + 1}.patch`);
+                const branch = `${config.branchPrefix}${b.key}`.replaceAll(" ", "");
+                const worktreeDir = (0, git_1.tempDirForBucket)(b.key);
+                logger.info(`Creating PR for bucket=${b.key} on branch=${branch}`);
+                (0, git_1.worktreeAdd)(branch, baseRef, worktreeDir);
+                try {
+                    (0, git_1.applyPatch)(patchPath, worktreeDir);
+                    const committed = (0, git_1.commitAllStaged)(config.commitMessage, worktreeDir);
+                    if (!committed) {
+                        logger.warn(`No staged changes for bucket=${b.key}; skipping push/PR.`);
+                        continue;
+                    }
+                    (0, git_1.pushBranch)(config.remoteName, branch, worktreeDir);
+                    const ownersStr = b.owners.length ? b.owners.join(", ") : "(unowned)";
+                    const filesStr = b.files.map(f => `- ${f.file}`).join("\n");
+                    const bucketInfo = formatTemplate("Automated changes bucketed by CODEOWNERS.\n\nOwners: {owners}\nBucket key: {bucket_key}\n\nFiles:\n{files}\n", { owners: ownersStr, bucket_key: b.key, files: filesStr });
+                    const title = formatTemplate(config.prTitle, { owners: ownersStr, bucket_key: b.key });
+                    let body;
+                    if (config.prBodyMode === "none") {
+                        body = undefined;
+                    }
+                    else if (config.prBodyMode === "custom") {
+                        body = formatTemplate(config.prBody, { owners: ownersStr, bucket_key: b.key, files: filesStr });
+                    }
+                    else {
+                        const template = (0, pr_template_1.readPrTemplate)(worktreeDir, config.prTemplatePath) ?? "";
+                        body =
+                            config.prBodyMode === "template_with_bucket"
+                                ? (template ? template.trimEnd() + "\n\n---\n\n" + bucketInfo : bucketInfo)
+                                : (template || bucketInfo);
+                    }
+                    const pr = useGhCli
+                        ? (() => {
+                            return (0, ghcli_1.upsertPullRequestViaGh)({
+                                cwd: worktreeDir,
+                                base: baseBranch,
+                                head: branch,
+                                title,
+                                body: body ?? "",
+                                draft: config.draft,
+                                bucketKey: b.key
+                            });
+                        })()
+                        : await (0, github_1.upsertPullRequest)({
+                            octokit: octokit,
+                            repo,
                             base: baseBranch,
                             head: branch,
                             title,
@@ -1960,41 +1982,35 @@ async function runSplit(config, logger) {
                             draft: config.draft,
                             bucketKey: b.key
                         });
-                    })()
-                    : await (0, github_1.upsertPullRequest)({
-                        octokit: octokit,
-                        repo,
-                        base: baseBranch,
-                        head: branch,
-                        title,
-                        body: body ?? "",
-                        draft: config.draft,
-                        bucketKey: b.key
-                    });
-                prs.push(pr);
-                logger.info(`PR: ${pr.url}`);
-            }
-            finally {
-                (0, git_1.worktreeRemove)(worktreeDir);
+                    prs.push(pr);
+                    logger.info(`PR: ${pr.url}`);
+                }
+                finally {
+                    (0, git_1.worktreeRemove)(worktreeDir);
+                }
             }
         }
+        if (config.cleanupPatches && !config.dryRun) {
+            const cwd = process.cwd();
+            const abs = node_path_1.default.resolve(cwd, config.patchDir);
+            const safePrefix = cwd.endsWith(node_path_1.default.sep) ? cwd : cwd + node_path_1.default.sep;
+            if (!abs.startsWith(safePrefix)) {
+                throw new Error(`Refusing to delete patch_dir outside repo: ${abs}`);
+            }
+            if (abs === cwd) {
+                throw new Error("Refusing to delete patch_dir equal to repo root.");
+            }
+            if (node_fs_1.default.existsSync(abs)) {
+                logger.info(`Cleaning up patches dir: ${config.patchDir}`);
+                node_fs_1.default.rmSync(abs, { recursive: true, force: true });
+            }
+        }
+        return { buckets, matrix, prs };
     }
-    if (config.cleanupPatches && !config.dryRun) {
-        const cwd = process.cwd();
-        const abs = node_path_1.default.resolve(cwd, config.patchDir);
-        const safePrefix = cwd.endsWith(node_path_1.default.sep) ? cwd : cwd + node_path_1.default.sep;
-        if (!abs.startsWith(safePrefix)) {
-            throw new Error(`Refusing to delete patch_dir outside repo: ${abs}`);
-        }
-        if (abs === cwd) {
-            throw new Error("Refusing to delete patch_dir equal to repo root.");
-        }
-        if (node_fs_1.default.existsSync(abs)) {
-            logger.info(`Cleaning up patches dir: ${config.patchDir}`);
-            node_fs_1.default.rmSync(abs, { recursive: true, force: true });
-        }
+    finally {
+        if (resolvedRepoPath)
+            process.chdir(originalCwd);
     }
-    return { buckets, matrix, prs };
 }
 
 
@@ -13324,6 +13340,7 @@ function printHelp() {
         "  npx split-by-codeowners [options]",
         "",
         "Common options:",
+        "  --repo-path <path>            Repo path (relative to cwd) to operate on",
         "  --codeowners <path>           Path to CODEOWNERS (default: CODEOWNERS)",
         "  --exclude <file|->            File with newline-separated globs, or '-' to read stdin",
         "  --include-unowned <true|false> (default: true)",
@@ -13373,6 +13390,7 @@ async function main() {
         error: (m) => process.stderr.write(m + "\n")
     };
     // defaults
+    let repoPath = undefined;
     let codeownersPath = "CODEOWNERS";
     let includeUnowned = true;
     let unownedBucketKey = "__UNOWNED__";
@@ -13394,7 +13412,9 @@ async function main() {
     // parse args
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
-        if (a === "--codeowners")
+        if (a === "--repo-path")
+            repoPath = takeArg(argv, i++, a);
+        else if (a === "--codeowners")
             codeownersPath = takeArg(argv, i++, a);
         else if (a === "--include-unowned")
             includeUnowned = (0, buckets_2.parseBool)(takeArg(argv, i++, a));
@@ -13437,6 +13457,7 @@ async function main() {
             throw new Error(`Unknown arg: ${a}`);
     }
     const cfg = {
+        repoPath,
         codeownersPath,
         includeUnowned,
         unownedBucketKey,

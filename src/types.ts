@@ -23,6 +23,7 @@ export type PullRequestInfo = {
 
 export type SplitConfig = {
   // bucketing
+  repoPath?: string;
   codeownersPath: string;
   baseRef?: string;
   includeUnowned: boolean;

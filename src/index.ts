@@ -1,4 +1,5 @@
 import * as core from "@actions/core";
+import path from "node:path";
 import {
   parseBool,
   readMultiline,
@@ -8,7 +9,14 @@ import type { Logger, SplitConfig } from "./types";
 
 async function run() {
   try {
+    const repoPathInput = core.getInput("repo_path") || ".";
+    const workspace = process.env.GITHUB_WORKSPACE || "";
+    const repoPath = repoPathInput
+      ? (path.isAbsolute(repoPathInput) ? repoPathInput : path.resolve(workspace || process.cwd(), repoPathInput))
+      : undefined;
+
     const cfg: SplitConfig = {
+      repoPath,
       codeownersPath: core.getInput("codeowners_path") || "CODEOWNERS",
       baseRef: core.getInput("base_ref") || "",
       includeUnowned: parseBool(core.getInput("include_unowned")),

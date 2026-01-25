@@ -15,6 +15,7 @@ function printHelp() {
       "  npx split-by-codeowners [options]",
       "",
       "Common options:",
+      "  --repo-path <path>            Repo path (relative to cwd) to operate on",
       "  --codeowners <path>           Path to CODEOWNERS (default: CODEOWNERS)",
       "  --exclude <file|->            File with newline-separated globs, or '-' to read stdin",
       "  --include-unowned <true|false> (default: true)",
@@ -68,6 +69,7 @@ async function main() {
   };
 
   // defaults
+  let repoPath: string | undefined = undefined;
   let codeownersPath = "CODEOWNERS";
   let includeUnowned = true;
   let unownedBucketKey = "__UNOWNED__";
@@ -92,7 +94,8 @@ async function main() {
   // parse args
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--codeowners") codeownersPath = takeArg(argv, i++, a);
+    if (a === "--repo-path") repoPath = takeArg(argv, i++, a);
+    else if (a === "--codeowners") codeownersPath = takeArg(argv, i++, a);
     else if (a === "--include-unowned") includeUnowned = parseBool(takeArg(argv, i++, a));
     else if (a === "--unowned-bucket-key") unownedBucketKey = takeArg(argv, i++, a);
     else if (a === "--max-buckets") maxBuckets = Number(takeArg(argv, i++, a));
@@ -117,6 +120,7 @@ async function main() {
   }
 
   const cfg: SplitConfig = {
+    repoPath,
     codeownersPath,
     includeUnowned,
     unownedBucketKey,

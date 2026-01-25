@@ -6,6 +6,11 @@ branding:
   color: "blue"
 
 inputs:
+  repo_path:
+    description: "Relative path under GITHUB_WORKSPACE to the repo root."
+    required: false
+    default: "."
+
   codeowners_path:
     description: "Path to CODEOWNERS. Defaults to CODEOWNERS at repo root."
     required: false

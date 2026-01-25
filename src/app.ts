@@ -31,6 +31,18 @@ function ensureDirExists(dir: string) {
 }
 
 export async function runSplit(config: SplitConfig, logger: Logger): Promise<SplitResult> {
+  const originalCwd = process.cwd();
+  let resolvedRepoPath: string | undefined;
+  if (config.repoPath) {
+    resolvedRepoPath = path.resolve(originalCwd, config.repoPath);
+    if (!fs.existsSync(resolvedRepoPath)) {
+      throw new Error(`repo_path does not exist: ${resolvedRepoPath}`);
+    }
+    process.chdir(resolvedRepoPath);
+    logger.info(`Using repo_path: ${resolvedRepoPath}`);
+  }
+
+  try {
   if (config.createPrs && config.dryRun) {
     throw new Error("create_prs=true requires dry_run=false (we need patch files to create bucket branches/PRs).");
   }
@@ -204,5 +216,8 @@ export async function runSplit(config: SplitConfig, logger: Logger): Promise<Spl
   }
 
   return { buckets, matrix, prs };
+  } finally {
+    if (resolvedRepoPath) process.chdir(originalCwd);
+  }
 }
 
